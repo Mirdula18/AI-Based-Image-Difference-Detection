@@ -1,0 +1,46 @@
+{
+  "stats": {
+    "registration_success": true,
+    "registration_method": "feature",
+    "registration_message": "Registered via 'feature' method with alignment score 0.61.",
+    "alignment_score": 0.608,
+    "diff_mode": "linework",
+    "image_width": 1600,
+    "image_height": 1200,
+    "total_region_count": 2,
+    "percent_area_changed": 1.332,
+    "regions": [
+      {
+        "index": 0,
+        "bbox": {
+          "x": 1146,
+          "y": 696,
+          "w": 159,
+          "h": 159
+        },
+        "area_px": 24942,
+        "centroid": {
+          "x": 1225.0,
+          "y": 775.0
+        },
+        "location": "middle-right"
+      },
+      {
+        "index": 1,
+        "bbox": {
+          "x": 497,
+          "y": 941,
+          "w": 156,
+          "h": 6
+        },
+        "area_px": 628,
+        "centroid": {
+          "x": 573.0,
+          "y": 943.9
+        },
+        "location": "lower-center"
+      }
+    ]
+  },
+  "summary": "Comparison of the two drawing revisions found 2 changed region(s) covering approximately 1.332% of the sheet area, indicating a moderate revision. The largest changes are located in the middle-right, lower-center area(s) of the sheet. Alignment was performed via the 'feature' method with an alignment confidence score of 0.608."
+}
