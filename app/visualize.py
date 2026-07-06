@@ -85,3 +85,52 @@ def generate_side_by_side(image_a: np.ndarray, image_b: np.ndarray, gap_px: int 
     padded_b = pad_height(image_b)
     gap = np.full((h, gap_px, 3), 200, dtype=np.uint8)
     return np.hstack([padded_a, gap, padded_b])
+
+
+def generate_revision_overlay(
+    image_a: np.ndarray,
+    image_b: np.ndarray,
+    change_objects: list[dict],
+    alpha: float = 0.4
+) -> np.ndarray:
+    """Creates a multi-colored revision overlay based on change classification.
+
+    Color coding:
+    - Green (0, 200, 0): Added elements
+    - Red (0, 0, 220): Removed elements
+    - Orange (0, 140, 255): Modified physical objects (Doors, Windows)
+    - Blue (220, 0, 0): Annotation changes / Room renames
+    - Purple (200, 0, 200): Dimension changes
+    """
+    # Start with a faded/light grayscale version of the aligned image A as base
+    gray = cv2.cvtColor(image_b, cv2.COLOR_BGR2GRAY)
+    base = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    # Blend with white to wash it out slightly so colors stand out
+    base = cv2.addWeighted(base, 0.4, np.full_like(base, 255), 0.6, 0)
+
+    overlay = base.copy()
+    
+    for ch in change_objects:
+        x, y, w, h = ch["bbox"]
+        c_type = ch["type"]
+        delta = str(ch.get("delta", ""))
+        
+        # Select color based on classification rules
+        if "Added" in delta or "added" in c_type.lower():
+            color = (0, 200, 0)      # Green
+        elif "Removed" in delta or "removed" in c_type.lower():
+            color = (0, 0, 220)      # Red
+        elif c_type == "Dimension Change":
+            color = (200, 0, 200)    # Purple
+        elif c_type in ["Annotation Change", "Title Block Change", "Room Change"]:
+            color = (220, 0, 0)      # Blue
+        else:
+            color = (0, 140, 255)    # Orange (Door Change, Window Change, Wall Extension, Geometry Change)
+            
+        # Draw filled transparent rectangle
+        cv2.rectangle(overlay, (x, y), (x + w, y + h), color, -1)
+        # Draw solid border
+        cv2.rectangle(base, (x, y), (x + w, y + h), color, 2)
+        
+    return cv2.addWeighted(overlay, alpha, base, 1 - alpha, 0)
+
