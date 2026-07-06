@@ -44,57 +44,93 @@ def _fallback_summary(stats: ComparisonStats) -> str:
             "manually or supply clearer/higher-resolution source files."
         )
 
-    if stats.total_region_count == 0:
-        return (
-            "No significant differences were detected between the two "
-            "drawing revisions after alignment; the sheets appear "
-            "effectively identical within the configured sensitivity "
-            "threshold."
-        )
+    if not stats.change_objects:
+        if stats.total_region_count == 0:
+            return (
+                "No significant differences were detected between the two "
+                "drawing revisions after alignment; the sheets appear "
+                "effectively identical within the configured sensitivity "
+                "threshold."
+            )
+        else:
+            # Fallback when there are regions but no detailed change_objects yet
+            top_regions = stats.regions[:3]
+            locations = ", ".join(r.location for r in top_regions)
+            severity = stats.severity_index.lower()
+            return (
+                f"Comparison of the two drawing revisions found {stats.total_region_count} "
+                f"changed region(s) covering approximately {stats.percent_area_changed}% "
+                f"of the sheet area, indicating a {severity} revision. The largest "
+                f"changes are located in the {locations} area(s) of the sheet."
+            )
 
-    top_regions = stats.regions[:3]
-    locations = ", ".join(r.location for r in top_regions)
-    severity = (
-        "substantial"
-        if stats.percent_area_changed > 5
-        else "moderate"
-        if stats.percent_area_changed > 1
-        else "minor"
+    # Compile explanations from change objects
+    explanations = []
+    
+    # Group changes by type
+    doors = [c for c in stats.change_objects if c["type"] == "Door Change"]
+    windows = [c for c in stats.change_objects if c["type"] == "Window Change"]
+    rooms = [c for c in stats.change_objects if c["type"] == "Room Change"]
+    dims = [c for c in stats.change_objects if c["type"] == "Dimension Change"]
+    walls = [c for c in stats.change_objects if c["type"] == "Wall Extension"]
+    
+    # Compile a few select major modifications
+    for r in rooms[:2]:
+        if r.get("old_value") and r.get("new_value"):
+            explanations.append(f"Room '{r['old_value']}' was converted to '{r['new_value']}'")
+        elif r.get("new_value"):
+            explanations.append(f"Room '{r['new_value']}' was added")
+            
+    for d in doors[:2]:
+        delta_str = d.get("delta", "")
+        if "mm" in delta_str:
+            explanations.append(f"Door was adjusted by {delta_str}")
+        elif delta_str == "Added":
+            explanations.append(f"A new door was added {d.get('location', '')}")
+        elif delta_str == "Removed":
+            explanations.append(f"A door was removed {d.get('location', '')}")
+            
+    for w in windows[:2]:
+        delta_str = w.get("delta", "")
+        if "mm" in delta_str:
+            explanations.append(f"Window width was changed by {delta_str}")
+        elif delta_str == "Added":
+            explanations.append(f"A window was added")
+            
+    for dm in dims[:2]:
+        explanations.append(f"Dimension annotation was updated from '{dm['old_value']}' to '{dm['new_value']}'")
+
+    for wl in walls[:1]:
+        explanations.append(f"New wall structures were extended {wl.get('location', '')}")
+
+    # Build summary sentences
+    summary_parts = []
+    
+    total_mods = stats.total_changes
+    if total_mods == 1:
+        summary_parts.append("One modification was detected.")
+    elif total_mods > 1:
+        summary_parts.append(f"{total_mods} modifications were detected.")
+    else:
+        summary_parts.append("No semantic modifications were detected.")
+
+    if explanations:
+        # Join explanations with appropriate punctuation
+        summary_parts.append(". ".join(explanations) + ".")
+        
+    summary_parts.append(
+        f"Approximately {stats.percent_area_changed}% of the drawing sheet was modified, "
+        f"representing a {stats.severity_index.lower()} severity revision."
     )
-    return (
-        f"Comparison of the two drawing revisions found {stats.total_region_count} "
-        f"changed region(s) covering approximately {stats.percent_area_changed}% "
-        f"of the sheet area, indicating a {severity} revision. The largest "
-        f"changes are located in the {locations} area(s) of the sheet. "
-        f"Alignment was performed via the '{stats.registration_method}' method "
-        f"with an alignment confidence score of {stats.alignment_score}."
-    )
+
+    return " ".join(summary_parts)
 
 
 def summarize(stats: ComparisonStats) -> str:
     """Generate a natural-language summary paragraph from structured stats.
 
-    Attempts a live LLM call if ANTHROPIC_API_KEY is configured; otherwise
-    (or on any API error) falls back to a deterministic template so the
-    pipeline never hard-fails on the summary step.
+    Since the system must run entirely offline, it uses a deterministic
+    rule-based generator that synthesizes explanations of semantic changes.
     """
-    if not ANTHROPIC_API_KEY:
-        return _fallback_summary(stats)
+    return _fallback_summary(stats)
 
-    try:
-        import anthropic
-
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        prompt = PROMPT_TEMPLATE.format(
-            stats_json=json.dumps(stats.to_dict(), indent=2)
-        )
-        response = client.messages.create(
-            model=ANTHROPIC_MODEL,
-            max_tokens=SUMMARY_MAX_TOKENS,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text_parts = [block.text for block in response.content if block.type == "text"]
-        summary = "".join(text_parts).strip()
-        return summary or _fallback_summary(stats)
-    except Exception:
-        return _fallback_summary(stats)

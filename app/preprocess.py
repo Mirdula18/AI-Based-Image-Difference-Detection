@@ -20,6 +20,7 @@ class NormalizedPair:
     image_a: np.ndarray
     image_b: np.ndarray
     target_size: tuple[int, int]  # (width, height)
+    pixel_ratio: float = 0.52
 
 
 def _fit_scale(w: int, h: int, max_dim: int) -> float:
@@ -33,6 +34,7 @@ def normalize_pair(
     image_a: np.ndarray,
     image_b: np.ndarray,
     max_dim: int = MAX_WORKING_DIMENSION,
+    page_a: IngestedImage | None = None,
 ) -> NormalizedPair:
     """Resize both images to a shared working resolution.
 
@@ -41,6 +43,8 @@ def normalize_pair(
     i.e. we standardize on the *smaller* of the two natural resolutions
     so we never upscale a low-res input past the other image's detail.
     """
+    from app.ingest import IngestedImage  # Avoid circular import
+
     ha, wa = image_a.shape[:2]
     hb, wb = image_b.shape[:2]
 
@@ -79,4 +83,19 @@ def normalize_pair(
     padded_a = pad_to(resized_a, common_h, common_w)
     padded_b = pad_to(resized_b, common_h, common_w)
 
-    return NormalizedPair(image_a=padded_a, image_b=padded_b, target_size=(common_w, common_h))
+    pixel_ratio = 0.52
+    if page_a is not None and page_a.source_kind == "pdf" and page_a.page_width > 0:
+        paper_w_mm = page_a.page_width * 25.4 / 72.0
+        # Assume scale 1:100 by default. E.g. A1 sheet is ~841mm wide.
+        default_drawing_scale = 100.0
+        pixel_ratio = (paper_w_mm * default_drawing_scale) / common_w
+    elif page_a is not None and page_a.source_kind == "raster":
+        pixel_ratio = 0.52
+
+    return NormalizedPair(
+        image_a=padded_a,
+        image_b=padded_b,
+        target_size=(common_w, common_h),
+        pixel_ratio=pixel_ratio,
+    )
+
