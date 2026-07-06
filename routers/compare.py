@@ -49,6 +49,18 @@ async def compare(
         except IngestionError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+        if result.stats.get("status") == "aborted":
+            raise HTTPException(
+                status_code=400,
+                detail="Comparison aborted. Alignment confidence too low. Please review inputs."
+            )
+        elif result.stats.get("status") == "unreliable":
+            raise HTTPException(
+                status_code=400,
+                detail="Comparison quality insufficient. Too many candidate changes detected. Likely registration failure."
+            )
+
+
     image_urls = {
         name: f"/static/results/{job_id}/{os.path.basename(path)}"
         for name, path in result.image_paths.items()
@@ -59,4 +71,6 @@ async def compare(
         "images": image_urls,
         "stats": result.stats,
         "summary": result.summary,
+        "pdf_report_url": image_urls.get("pdf_report", ""),
     }
+

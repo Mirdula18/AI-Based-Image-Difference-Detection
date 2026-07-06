@@ -46,8 +46,18 @@ if run_clicked and file_a and file_b:
             response.raise_for_status()
             result = response.json()
         except requests.RequestException as exc:
-            st.error(f"Request to API failed: {exc}")
+            detail = ""
+            try:
+                if exc.response is not None:
+                    detail = exc.response.json().get("detail", "")
+            except Exception:
+                pass
+            if detail:
+                st.error(detail)
+            else:
+                st.error(f"Request to API failed: {exc}")
             result = None
+
 
     if result:
         stats = result["stats"]
@@ -93,3 +103,9 @@ if run_clicked and file_a and file_b:
 
         st.subheader("AI Summary")
         st.write(result["summary"])
+
+        if "pdf_report_url" in result and result["pdf_report_url"]:
+            st.subheader("Revision PDF Report")
+            pdf_url = f"{API_URL}{result['pdf_report_url']}"
+            st.link_button("📥 Download Detailed PDF Report", pdf_url, type="primary")
+
