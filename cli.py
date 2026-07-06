@@ -46,6 +46,14 @@ def main() -> int:
         print(f"Ingestion error: {exc}", file=sys.stderr)
         return 1
 
+    if result.stats.get("status") == "aborted":
+        print("Comparison aborted. Alignment confidence too low. Please review inputs.", file=sys.stderr)
+        return 1
+    elif result.stats.get("status") == "unreliable":
+        print("Comparison quality insufficient. Too many candidate changes detected. Likely registration failure.", file=sys.stderr)
+        return 1
+
+
     print("=== Stats ===")
     print(json.dumps(result.stats, indent=2))
     print("\n=== Summary ===")
